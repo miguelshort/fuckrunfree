@@ -24,8 +24,12 @@ jobs:
           distribution: temurin
           java-version: 17
 
-      - name: Android SDK
-        uses: android-actions/setup-android@v3
+      # El runner ya incluye el Android SDK (ANDROID_HOME). Solo aceptamos licencias e instalamos lo necesario.
+      - name: Android SDK (licencias y plataforma)
+        run: |
+          SDKM="$ANDROID_HOME/cmdline-tools/latest/bin/sdkmanager"
+          yes | "$SDKM" --licenses > /dev/null || true
+          "$SDKM" "platforms;android-34" "build-tools;34.0.0"
 
       # El proyecto no incluye gradle-wrapper: se usa Gradle 8.7 (compatible con AGP 8.5.2)
       - name: Gradle
