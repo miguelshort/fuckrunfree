@@ -14,9 +14,20 @@ jobs:
   build:
     runs-on: ubuntu-latest
     timeout-minutes: 30
+    env:
+      # Opcional: secreto del repositorio con la clave de Google Maps (Settings > Secrets > Actions)
+      MAPS_API_KEY: ${{ secrets.MAPS_API_KEY }}
     steps:
       - name: Checkout
         uses: actions/checkout@v4
+
+      # Localiza settings.gradle.kts aunque el proyecto esté dentro de una subcarpeta
+      - name: Localizar proyecto
+        run: |
+          f=$(find . -name settings.gradle.kts -not -path "*/build/*" | head -n1)
+          if [ -z "$f" ]; then echo "::error::No se encuentra settings.gradle.kts en el repositorio"; exit 1; fi
+          echo "PROJECT_DIR=$(dirname "$f")" >> "$GITHUB_ENV"
+          echo "Proyecto en: $(dirname "$f")"
 
       - name: JDK 17
         uses: actions/setup-java@v4
@@ -24,35 +35,35 @@ jobs:
           distribution: temurin
           java-version: 17
 
-      # El runner ya incluye el Android SDK (ANDROID_HOME). Solo aceptamos licencias e instalamos lo necesario.
       - name: Android SDK (licencias y plataforma)
         run: |
           SDKM="$ANDROID_HOME/cmdline-tools/latest/bin/sdkmanager"
           yes | "$SDKM" --licenses > /dev/null || true
           "$SDKM" "platforms;android-34" "build-tools;34.0.0"
 
-      # El proyecto no incluye gradle-wrapper: se usa Gradle 8.7 (compatible con AGP 8.5.2)
-      - name: Gradle
+      - name: Gradle 8.7
         uses: gradle/actions/setup-gradle@v4
         with:
           gradle-version: 8.7
 
-      - name: Tests unitarios (motor de métricas)
-        run: gradle :app:testDebugUnitTest --stacktrace
+      - name: Pruebas unitarias (motor de métricas)
+        working-directory: ${{ env.PROJECT_DIR }}
+        run: gradle :app:testDebugUnitTest --console=plain
 
       - name: Compilar APK debug
-        run: gradle :app:assembleDebug --stacktrace
+        working-directory: ${{ env.PROJECT_DIR }}
+        run: gradle :app:assembleDebug --console=plain
 
       - name: Subir informes de tests
         if: always()
         uses: actions/upload-artifact@v4
         with:
           name: informes-tests
-          path: app/build/reports/tests/
+          path: ${{ env.PROJECT_DIR }}/app/build/reports/tests/
           if-no-files-found: ignore
 
       - name: Subir APK
         uses: actions/upload-artifact@v4
         with:
           name: fuckrun-debug-apk
-          path: app/build/outputs/apk/debug/app-debug.apk
+          path: ${{ env.PROJECT_DIR }}/app/build/outputs/apk/debug/app-debug.apk
